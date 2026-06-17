@@ -4,7 +4,7 @@
   "description": "AI code reviewer for TypeScript/Node.js fintech",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc && ncc build dist/index.js -o dist --minify",
+    "build": "ncc build src/index.ts -o dist --minify",
     "test": "vitest run",
     "lint": "biome check src/",
     "format": "biome format --write src/"
