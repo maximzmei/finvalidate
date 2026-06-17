@@ -1,5 +1,5 @@
-import { getPRFiles, postOrUpdateComment, PRFile } from './github';
-import { callClaude } from './claude';
+import { callClaude } from "./claude";
+import { type PRFile, getPRFiles, postOrUpdateComment } from "./github";
 
 export interface ReviewInput {
   token: string;
@@ -17,10 +17,15 @@ export interface ReviewResult {
   commentUrl?: string;
 }
 
-const FINVALIDATE_COMMENT_MARKER = '<!-- finvalidate-review -->';
+const FINVALIDATE_COMMENT_MARKER = "<!-- finvalidate-review -->";
 
 export async function reviewPR(input: ReviewInput): Promise<ReviewResult> {
-  const files = await getPRFiles(input.token, input.owner, input.repo, input.prNumber);
+  const files = await getPRFiles(
+    input.token,
+    input.owner,
+    input.repo,
+    input.prNumber,
+  );
 
   const diff = formatDiff(files, input.maxDiffTokens);
   if (!diff.trim()) {
@@ -29,7 +34,7 @@ export async function reviewPR(input: ReviewInput): Promise<ReviewResult> {
 
   const response = await callClaude(input.apiKey, input.model, diff);
 
-  if (response.includes('No fintech rule violations detected')) {
+  if (response.includes("No fintech rule violations detected")) {
     return { violationsFound: false, criticalCount: 0 };
   }
 
@@ -37,8 +42,12 @@ export async function reviewPR(input: ReviewInput): Promise<ReviewResult> {
   const body = formatComment(response);
 
   const commentUrl = await postOrUpdateComment(
-    input.token, input.owner, input.repo, input.prNumber,
-    body, FINVALIDATE_COMMENT_MARKER
+    input.token,
+    input.owner,
+    input.repo,
+    input.prNumber,
+    body,
+    FINVALIDATE_COMMENT_MARKER,
   );
 
   return { violationsFound: true, criticalCount, commentUrl };
@@ -50,12 +59,12 @@ export function formatDiff(files: PRFile[], maxTokens: number): string {
 
   for (const file of files) {
     if (!file.patch) continue;
-    if (file.status === 'removed') continue;
+    if (file.status === "removed") continue;
 
     const addedLines = file.patch
-      .split('\n')
-      .filter(l => l.startsWith('+') && !l.startsWith('+++'))
-      .join('\n');
+      .split("\n")
+      .filter((l) => l.startsWith("+") && !l.startsWith("+++"))
+      .join("\n");
 
     if (!addedLines) continue;
 
@@ -66,17 +75,17 @@ export function formatDiff(files: PRFile[], maxTokens: number): string {
     chunks.push(chunk);
   }
 
-  return chunks.join('\n');
+  return chunks.join("\n");
 }
 
 function formatComment(review: string): string {
   return [
     FINVALIDATE_COMMENT_MARKER,
-    '## FinValidate Review',
-    '',
+    "## FinValidate Review",
+    "",
     review,
-    '',
-    '---',
-    '*Powered by [FinValidate](https://finvalidate.dev) — AI code review for TypeScript fintech*',
-  ].join('\n');
+    "",
+    "---",
+    "*Powered by [FinValidate](https://finvalidate.dev) — AI code review for TypeScript fintech*",
+  ].join("\n");
 }
