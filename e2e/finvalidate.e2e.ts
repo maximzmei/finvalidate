@@ -14,7 +14,7 @@ const DIST_PATH = path.join(process.cwd(), 'dist', 'index.js');
 
 describe('FinValidate E2E', () => {
   const stub = createStubServer(STUB_PORT);
-  let pr: EphemeralPR;
+  let pr: EphemeralPR | undefined;
 
   beforeAll(async () => {
     if (!TOKEN || !OWNER || !REPO) {
@@ -31,7 +31,7 @@ describe('FinValidate E2E', () => {
   });
 
   afterAll(async () => {
-    if (pr) await cleanupPR(TOKEN, OWNER, REPO, pr.prNumber, pr.branchName);
+    if (pr) await cleanupPR(TOKEN, OWNER, REPO, pr.prNumber, pr.branchName, pr.eventPath);
     await stub.stop();
   });
 
@@ -57,9 +57,9 @@ describe('FinValidate E2E', () => {
       timeout: 20000,
     });
 
-    if (result.status !== 0) {
+    if (result.status !== 0 || result.signal) {
       throw new Error(
-        `dist/index.js exited with code ${result.status}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
+        `dist/index.js exited with code ${result.status} signal ${result.signal ?? 'none'}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
       );
     }
 

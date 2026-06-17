@@ -75,19 +75,25 @@ export async function cleanupPR(
   repo: string,
   prNumber: number,
   branchName: string,
+  eventPath: string,
 ): Promise<void> {
   const octokit = new Octokit({ auth: token });
 
-  await octokit.pulls.update({
-    owner,
-    repo,
-    pull_number: prNumber,
-    state: 'closed',
-  });
+  try {
+    await octokit.pulls.update({ owner, repo, pull_number: prNumber, state: 'closed' });
+  } catch (e) {
+    console.error('cleanupPR: failed to close PR', e);
+  }
 
-  await octokit.git.deleteRef({
-    owner,
-    repo,
-    ref: `heads/${branchName}`,
-  });
+  try {
+    await octokit.git.deleteRef({ owner, repo, ref: `heads/${branchName}` });
+  } catch (e) {
+    console.error('cleanupPR: failed to delete branch', e);
+  }
+
+  try {
+    fs.unlinkSync(eventPath);
+  } catch {
+    // ignore — file may not exist
+  }
 }
