@@ -23,7 +23,7 @@ export async function postOrUpdateComment(
   const octokit = new Octokit({ auth: token });
 
   const { data: comments } = await octokit.issues.listComments({
-    owner, repo, issue_number: prNumber,
+    owner, repo, issue_number: prNumber, per_page: 100,
   });
 
   const existing = comments.find(c => c.body?.includes(marker));
