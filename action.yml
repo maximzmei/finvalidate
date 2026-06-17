@@ -1,0 +1,40 @@
+name: 'FinValidate'
+description: 'AI code reviewer for TypeScript/Node.js fintech — catches decimal bugs, idempotency issues, PCI-DSS violations'
+author: 'FinValidate'
+
+branding:
+  icon: 'shield'
+  color: 'blue'
+
+inputs:
+  github-token:
+    description: 'GitHub token for reading PRs and posting comments'
+    required: true
+    default: ${{ github.token }}
+  anthropic-api-key:
+    description: 'Anthropic API key'
+    required: true
+  model:
+    description: 'Claude model to use'
+    required: false
+    default: 'claude-sonnet-4-6'
+  max-diff-tokens:
+    description: 'Maximum diff tokens to send to Claude (cost control)'
+    required: false
+    default: '6000'
+  fail-on-critical:
+    description: 'Fail the Action step if CRITICAL violations are found'
+    required: false
+    default: 'false'
+
+outputs:
+  violations-found:
+    description: 'true if any violations were detected'
+  critical-count:
+    description: 'Number of CRITICAL violations found'
+  comment-url:
+    description: 'URL of the posted PR comment'
+
+runs:
+  using: 'node20'
+  main: 'dist/index.js'
