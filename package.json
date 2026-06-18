@@ -9,7 +9,7 @@
     "lint": "biome check src/",
     "format": "biome format --write src/",
     "e2e": "vitest run --config vitest.e2e.config.ts",
-    "e2e:real": "vitest run --config vitest.e2e.config.ts --reporter=verbose"
+    "e2e:real": "vitest run --config vitest.e2e.config.ts --reporter=verbose e2e/finvalidate-real.e2e.ts"
   },
   "dependencies": {
     "@actions/core": "^1.10.0",

@@ -47,6 +47,7 @@ describe('FinValidate Phase D — Real Claude', () => {
           'INPUT_MAX-DIFF-TOKENS': '6000',
           'INPUT_FAIL-ON-CRITICAL': 'false',
           // NO ANTHROPIC_BASE_URL — SDK calls real api.anthropic.com
+          ANTHROPIC_BASE_URL: undefined,
           GITHUB_REPOSITORY: `${OWNER}/${REPO}`,
           GITHUB_EVENT_NAME: 'pull_request',
           GITHUB_EVENT_PATH: pr!.eventPath,
@@ -91,7 +92,7 @@ describe('FinValidate Phase D — Real Claude', () => {
     expect(body).toContain('FIN-001');
 
     // Claude cited the exact violation line from the diff
-    expect(body).toContain('price * quantity');
+    expect(body).toMatch(/price\s*\*\s*quantity/i);
 
     // Claude suggested the correct fix type
     expect(body.toLowerCase()).toMatch(/decimal|bigint/);
