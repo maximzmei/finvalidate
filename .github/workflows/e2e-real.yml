@@ -1,0 +1,28 @@
+name: E2E (Real Claude)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  e2e-real:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Build dist/index.js
+        run: npm run build
+
+      - name: Run Phase D E2E (real claude-haiku-4-5)
+        run: npm run e2e:real
+        env:
+          E2E_GITHUB_TOKEN: ${{ secrets.E2E_GITHUB_TOKEN }}
+          E2E_REPO_OWNER: ${{ github.repository_owner }}
+          E2E_REPO_NAME: finvalidate-e2e-sandbox
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
