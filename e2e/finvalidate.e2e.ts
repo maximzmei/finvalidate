@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { spawnSync } from 'child_process';
+import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Octokit } from '@octokit/rest';
@@ -36,25 +36,44 @@ describe('FinValidate E2E', () => {
   });
 
   it('finds FIN-001 violation and posts comment to PR', async () => {
-    // Run dist/index.js as a child process — same as GitHub Actions runner would
-    const result = spawnSync('node', [DIST_PATH], {
-      env: {
-        ...process.env,
-        // GitHub Actions inputs (core.getInput reads INPUT_<NAME_UPPERCASED>)
-        'INPUT_GITHUB-TOKEN': TOKEN,
-        'INPUT_ANTHROPIC-API-KEY': 'fake-key-stub-only',
-        INPUT_MODEL: 'claude-sonnet-4-6',
-        'INPUT_MAX-DIFF-TOKENS': '6000',
-        'INPUT_FAIL-ON-CRITICAL': 'false',
-        // Redirect Anthropic SDK to our stub
-        ANTHROPIC_BASE_URL: `http://localhost:${STUB_PORT}`,
-        // GitHub Actions context
-        GITHUB_REPOSITORY: `${OWNER}/${REPO}`,
-        GITHUB_EVENT_NAME: 'pull_request',
-        GITHUB_EVENT_PATH: pr.eventPath,
-      },
-      encoding: 'utf-8',
-      timeout: 20000,
+    // Run dist/index.js as a child process — same as GitHub Actions runner would.
+    // Must use async spawn (not spawnSync) so the event loop stays free to serve
+    // the Express stub; spawnSync blocks the event loop → deadlock.
+    const result = await new Promise<{
+      status: number | null;
+      signal: NodeJS.Signals | null;
+      stdout: string;
+      stderr: string;
+    }>((resolve) => {
+      const proc = spawn('node', [DIST_PATH], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: {
+          ...process.env,
+          // GitHub Actions inputs (core.getInput reads INPUT_<NAME_UPPERCASED>)
+          'INPUT_GITHUB-TOKEN': TOKEN,
+          'INPUT_ANTHROPIC-API-KEY': 'fake-key-stub-only',
+          INPUT_MODEL: 'claude-sonnet-4-6',
+          'INPUT_MAX-DIFF-TOKENS': '6000',
+          'INPUT_FAIL-ON-CRITICAL': 'false',
+          // Redirect Anthropic SDK to our stub
+          ANTHROPIC_BASE_URL: `http://localhost:${STUB_PORT}`,
+          // GitHub Actions context
+          GITHUB_REPOSITORY: `${OWNER}/${REPO}`,
+          GITHUB_EVENT_NAME: 'pull_request',
+          GITHUB_EVENT_PATH: pr!.eventPath,
+        },
+      });
+
+      let stdout = '';
+      let stderr = '';
+      proc.stdout.on('data', (d: Buffer) => (stdout += d.toString()));
+      proc.stderr.on('data', (d: Buffer) => (stderr += d.toString()));
+
+      const timer = setTimeout(() => proc.kill('SIGTERM'), 20000);
+      proc.on('close', (status, signal) => {
+        clearTimeout(timer);
+        resolve({ status, signal, stdout, stderr });
+      });
     });
 
     if (result.status !== 0 || result.signal) {
