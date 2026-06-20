@@ -34,11 +34,12 @@ export async function reviewPR(input: ReviewInput): Promise<ReviewResult> {
 
   const response = await callClaude(input.apiKey, input.model, diff);
 
-  if (response.includes("No fintech rule violations detected")) {
-    return { violationsFound: false, criticalCount: 0 };
-  }
-
-  const criticalCount = (response.match(/🔴 CRITICAL/g) ?? []).length;
+  const violationsFound = !response.includes(
+    "No fintech rule violations detected",
+  );
+  const criticalCount = violationsFound
+    ? (response.match(/🔴 CRITICAL/g) ?? []).length
+    : 0;
   const body = formatComment(response);
 
   const commentUrl = await postOrUpdateComment(
@@ -50,7 +51,7 @@ export async function reviewPR(input: ReviewInput): Promise<ReviewResult> {
     FINVALIDATE_COMMENT_MARKER,
   );
 
-  return { violationsFound: true, criticalCount, commentUrl };
+  return { violationsFound, criticalCount, commentUrl };
 }
 
 export function formatDiff(files: PRFile[], maxTokens: number): string {
