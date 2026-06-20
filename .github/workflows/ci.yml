@@ -18,3 +18,13 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+
+      - name: Release link
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
+        run: |
+          TAG="master-$(date -u +'%Y-%m-%d-%H%M')"
+          REPO="${{ github.repository }}"
+          URL="https://github.com/${REPO}/releases/new?tag=${TAG}&title=${TAG}&target=${{ github.sha }}"
+          echo "### ✅ CI passed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "[🚀 Create release \`${TAG}\` →](${URL})" >> $GITHUB_STEP_SUMMARY
