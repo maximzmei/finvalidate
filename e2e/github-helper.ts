@@ -66,7 +66,10 @@ export async function createEphemeralPR(
   // Write GitHub Actions event payload for dist/index.js to consume
   const eventPayload = {
     action: 'opened',
-    pull_request: { number: pr.number },
+    pull_request: {
+      number: pr.number,
+      base: { sha: pr.base.sha },
+    },
     repository: { name: repo, owner: { login: owner } },
   };
   const eventPath = path.join(os.tmpdir(), `finvalidate-pr-event-${Date.now()}.json`);
