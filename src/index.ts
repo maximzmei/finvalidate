@@ -1,5 +1,6 @@
 import * as core from "@actions/core";
 import * as github from "@actions/github";
+import { loadRepoConfig } from "./config";
 import { reviewPR } from "./review";
 
 async function run(): Promise<void> {
@@ -7,13 +8,23 @@ async function run(): Promise<void> {
   const apiKey = core.getInput("anthropic-api-key", { required: true });
   const model = core.getInput("model");
   const maxDiffTokens = Number.parseInt(core.getInput("max-diff-tokens"));
-  const failOnCritical = core.getInput("fail-on-critical") === "true";
+  const failOnCriticalInput = core.getInput("fail-on-critical") === "true";
 
   const context = github.context;
   if (!context.payload.pull_request) {
     core.info("Not a pull request event, skipping.");
     return;
   }
+
+  const baseSha = context.payload.pull_request.base.sha as string;
+  const config = await loadRepoConfig(
+    token,
+    context.repo.owner,
+    context.repo.repo,
+    baseSha,
+  );
+
+  const effectiveFailOnCritical = config.failOnCritical ?? failOnCriticalInput;
 
   const result = await reviewPR({
     token,
@@ -23,13 +34,14 @@ async function run(): Promise<void> {
     owner: context.repo.owner,
     repo: context.repo.repo,
     prNumber: context.payload.pull_request.number,
+    config,
   });
 
   core.setOutput("violations-found", String(result.violationsFound));
   core.setOutput("critical-count", String(result.criticalCount));
   core.setOutput("comment-url", result.commentUrl ?? "");
 
-  if (failOnCritical && result.criticalCount > 0) {
+  if (effectiveFailOnCritical && result.criticalCount > 0) {
     core.setFailed(
       `FinValidate: ${result.criticalCount} CRITICAL violation(s) found.`,
     );

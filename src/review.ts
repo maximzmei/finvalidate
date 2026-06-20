@@ -1,5 +1,7 @@
 import { callClaude } from "./claude";
+import type { RepoConfig } from "./config";
 import { type PRFile, getPRFiles, postOrUpdateComment } from "./github";
+import { buildSystemPrompt } from "./rules/fintech";
 
 export interface ReviewInput {
   token: string;
@@ -9,6 +11,7 @@ export interface ReviewInput {
   owner: string;
   repo: string;
   prNumber: number;
+  config: RepoConfig;
 }
 
 export interface ReviewResult {
@@ -32,7 +35,13 @@ export async function reviewPR(input: ReviewInput): Promise<ReviewResult> {
     return { violationsFound: false, criticalCount: 0 };
   }
 
-  const response = await callClaude(input.apiKey, input.model, diff);
+  const systemPrompt = buildSystemPrompt(input.config);
+  const response = await callClaude(
+    input.apiKey,
+    input.model,
+    diff,
+    systemPrompt,
+  );
 
   const violationsFound = !response.includes(
     "No fintech rule violations detected",
