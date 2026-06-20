@@ -97,4 +97,59 @@ describe('FinValidate Phase D — Real Claude', () => {
     // Claude suggested the correct fix type
     expect(body.toLowerCase()).toMatch(/decimal|bigint/);
   });
+
+  it('fail-on-critical: exits 1 when CRITICAL violation found', async () => {
+    const result = await new Promise<{
+      status: number | null;
+      stdout: string;
+      stderr: string;
+    }>((resolve) => {
+      const proc = spawn('node', [DIST_PATH], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: {
+          ...process.env,
+          'INPUT_GITHUB-TOKEN': TOKEN,
+          'INPUT_ANTHROPIC-API-KEY': ANTHROPIC_API_KEY,
+          INPUT_MODEL: 'claude-haiku-4-5-20251001',
+          'INPUT_MAX-DIFF-TOKENS': '6000',
+          'INPUT_FAIL-ON-CRITICAL': 'true',
+          ANTHROPIC_BASE_URL: undefined,
+          GITHUB_REPOSITORY: `${OWNER}/${REPO}`,
+          GITHUB_EVENT_NAME: 'pull_request',
+          GITHUB_EVENT_PATH: pr!.eventPath,
+        },
+      });
+
+      let stdout = '';
+      let stderr = '';
+      proc.stdout.on('data', (d: Buffer) => (stdout += d.toString()));
+      proc.stderr.on('data', (d: Buffer) => (stderr += d.toString()));
+
+      const timer = setTimeout(() => proc.kill('SIGTERM'), 25000);
+      proc.on('close', (status) => {
+        clearTimeout(timer);
+        resolve({ status, stdout, stderr });
+      });
+    });
+
+    expect(
+      result.status,
+      `Expected exit code 1, got ${result.status}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
+    ).toBe(1);
+
+    // Comment was still posted before Action exited
+    const octokit = new Octokit({ auth: TOKEN });
+    const { data: comments } = await octokit.issues.listComments({
+      owner: OWNER,
+      repo: REPO,
+      issue_number: pr!.prNumber,
+    });
+    const finvalidateComment = comments.find((c) =>
+      c.body?.includes('<!-- finvalidate-review -->'),
+    );
+    expect(
+      finvalidateComment,
+      `No FinValidate comment on PR #${pr!.prNumber}`,
+    ).toBeDefined();
+  });
 });
