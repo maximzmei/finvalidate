@@ -110,6 +110,25 @@ rules:
     );
   });
 
+  it("warns and skips invalid rule IDs as severity keys", async () => {
+    // spec: loadRepoConfig — invalid rule ID as severity key emits warning, valid ones still parsed
+    mockGetContent.mockResolvedValue(
+      encodeYaml(`
+rules:
+  severity:
+    FIN-001: warning
+    CUSTOM-001: critical
+`),
+    );
+
+    const result = await loadRepoConfig("token", "org", "repo", "abc123");
+
+    expect(result.severity).toEqual({ "FIN-001": "warning" });
+    expect(core.warning).toHaveBeenCalledWith(
+      'Unknown rule ID "CUSTOM-001" in severity overrides — skipping',
+    );
+  });
+
   it("returns DEFAULT_CONFIG when file has no recognized fields", async () => {
     // spec: loadRepoConfig — empty or unrecognized YAML returns DEFAULT_CONFIG
     mockGetContent.mockResolvedValue(encodeYaml("unknown_key: true"));

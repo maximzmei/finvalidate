@@ -36,6 +36,12 @@ export async function loadRepoConfig(
     if (Array.isArray(data) || data.type !== "file") {
       return DEFAULT_CONFIG;
     }
+    if (data.encoding !== "base64" || !data.content) {
+      core.warning(
+        ".finvalidate.yml could not be read (unexpected encoding) — using defaults",
+      );
+      return DEFAULT_CONFIG;
+    }
     raw = Buffer.from(data.content, "base64").toString("utf-8");
   } catch (err: unknown) {
     if (isNotFoundError(err)) return DEFAULT_CONFIG;
