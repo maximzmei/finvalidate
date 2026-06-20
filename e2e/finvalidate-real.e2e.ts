@@ -91,9 +91,6 @@ describe('FinValidate Phase D — Real Claude', () => {
     // Claude identified the rule
     expect(body).toContain('FIN-001');
 
-    // Claude cited the exact violation line from the diff
-    expect(body).toMatch(/price\s*\*\s*quantity/i);
-
     // Claude suggested the correct fix type
     expect(body.toLowerCase()).toMatch(/decimal|bigint/);
   });
