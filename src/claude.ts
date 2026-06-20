@@ -1,17 +1,17 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { FINTECH_SYSTEM_PROMPT } from "./rules/fintech";
 
 export async function callClaude(
   apiKey: string,
   model: string,
   diff: string,
+  systemPrompt: string,
 ): Promise<string> {
   const client = new Anthropic({ apiKey });
 
   const message = await client.messages.create({
     model,
     max_tokens: 1024,
-    system: FINTECH_SYSTEM_PROMPT,
+    system: systemPrompt,
     messages: [
       {
         role: "user",
