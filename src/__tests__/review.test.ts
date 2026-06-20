@@ -103,8 +103,8 @@ describe("reviewPR", () => {
     vi.clearAllMocks();
   });
 
-  it("returns no violations and skips posting comment when Claude returns clean signal", async () => {
-    // spec: reviewPR — skips comment if response includes "No fintech rule violations detected"
+  it("posts comment with clean signal and returns violationsFound=false", async () => {
+    // spec: reviewPR — always posts comment; violationsFound=false when response has no violations
     vi.mocked(getPRFiles).mockResolvedValue([
       {
         filename: "src/payment.ts",
@@ -115,13 +115,18 @@ describe("reviewPR", () => {
     vi.mocked(callClaude).mockResolvedValue(
       "✅ No fintech rule violations detected.",
     );
+    vi.mocked(postOrUpdateComment).mockResolvedValue(
+      "https://github.com/org/repo/pull/1#issuecomment-99",
+    );
 
     const result = await reviewPR(baseInput);
 
     expect(result.violationsFound).toBe(false);
     expect(result.criticalCount).toBe(0);
-    expect(result.commentUrl).toBeUndefined();
-    expect(postOrUpdateComment).not.toHaveBeenCalled();
+    expect(postOrUpdateComment).toHaveBeenCalledOnce();
+    expect(result.commentUrl).toBe(
+      "https://github.com/org/repo/pull/1#issuecomment-99",
+    );
   });
 
   it("posts comment, counts CRITICAL violations, and returns commentUrl", async () => {
@@ -134,7 +139,7 @@ describe("reviewPR", () => {
       },
     ] as unknown as ReturnType<typeof getPRFiles>);
     vi.mocked(callClaude).mockResolvedValue(
-      "🔴 CRITICAL: FIN-001 float arithmetic\n🔴 CRITICAL: FIN-003 toFixed",
+      "**[FIN-001] CRITICAL: float arithmetic\n**[FIN-003] CRITICAL: toFixed",
     );
     vi.mocked(postOrUpdateComment).mockResolvedValue(
       "https://github.com/org/repo/pull/1#issuecomment-99",

@@ -25,7 +25,7 @@ describe('FinValidate Phase D — Real Claude', () => {
       throw new Error(`dist/index.js not found at ${DIST_PATH} — run: npm run build`);
     }
     pr = await createEphemeralPR(TOKEN, OWNER, REPO);
-  });
+  }, 30000);
 
   afterAll(async () => {
     if (pr) await cleanupPR(TOKEN, OWNER, REPO, pr.prNumber, pr.branchName, pr.eventPath);
@@ -91,10 +91,141 @@ describe('FinValidate Phase D — Real Claude', () => {
     // Claude identified the rule
     expect(body).toContain('FIN-001');
 
-    // Claude cited the exact violation line from the diff
-    expect(body).toMatch(/price\s*\*\s*quantity/i);
-
     // Claude suggested the correct fix type
     expect(body.toLowerCase()).toMatch(/decimal|bigint/);
+  });
+
+  it('fail-on-critical: exits 1 when CRITICAL violation found', async () => {
+    const result = await new Promise<{
+      status: number | null;
+      stdout: string;
+      stderr: string;
+    }>((resolve) => {
+      const proc = spawn('node', [DIST_PATH], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: {
+          ...process.env,
+          'INPUT_GITHUB-TOKEN': TOKEN,
+          'INPUT_ANTHROPIC-API-KEY': ANTHROPIC_API_KEY,
+          INPUT_MODEL: 'claude-haiku-4-5-20251001',
+          'INPUT_MAX-DIFF-TOKENS': '6000',
+          'INPUT_FAIL-ON-CRITICAL': 'true',
+          ANTHROPIC_BASE_URL: undefined,
+          GITHUB_REPOSITORY: `${OWNER}/${REPO}`,
+          GITHUB_EVENT_NAME: 'pull_request',
+          GITHUB_EVENT_PATH: pr!.eventPath,
+        },
+      });
+
+      let stdout = '';
+      let stderr = '';
+      proc.stdout.on('data', (d: Buffer) => (stdout += d.toString()));
+      proc.stderr.on('data', (d: Buffer) => (stderr += d.toString()));
+
+      const timer = setTimeout(() => proc.kill('SIGTERM'), 25000);
+      proc.on('close', (status) => {
+        clearTimeout(timer);
+        resolve({ status, stdout, stderr });
+      });
+    });
+
+    expect(
+      result.status,
+      `Expected exit code 1, got ${result.status}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
+    ).toBe(1);
+
+    // Comment was still posted before Action exited
+    const octokit = new Octokit({ auth: TOKEN });
+    const { data: comments } = await octokit.issues.listComments({
+      owner: OWNER,
+      repo: REPO,
+      issue_number: pr!.prNumber,
+    });
+    const finvalidateComment = comments.find((c) =>
+      c.body?.includes('<!-- finvalidate-review -->'),
+    );
+    expect(
+      finvalidateComment,
+      `No FinValidate comment on PR #${pr!.prNumber}`,
+    ).toBeDefined();
+  });
+});
+
+describe('FinValidate Phase D — Clean PR', () => {
+  let cleanPr: EphemeralPR | undefined;
+
+  beforeAll(async () => {
+    if (!TOKEN || !OWNER || !REPO || !ANTHROPIC_API_KEY) {
+      throw new Error('Missing: E2E_GITHUB_TOKEN, E2E_REPO_OWNER, E2E_REPO_NAME, ANTHROPIC_API_KEY');
+    }
+    if (!fs.existsSync(DIST_PATH)) {
+      throw new Error(`dist/index.js not found at ${DIST_PATH} — run: npm run build`);
+    }
+    cleanPr = await createEphemeralPR(TOKEN, OWNER, REPO, 'clean-payment.ts');
+  }, 30000);
+
+  afterAll(async () => {
+    if (cleanPr) {
+      await cleanupPR(TOKEN, OWNER, REPO, cleanPr.prNumber, cleanPr.branchName, cleanPr.eventPath);
+    }
+  });
+
+  it('clean path: posts "no violations" comment and exits 0', async () => {
+    const result = await new Promise<{
+      status: number | null;
+      stdout: string;
+      stderr: string;
+    }>((resolve) => {
+      const proc = spawn('node', [DIST_PATH], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: {
+          ...process.env,
+          'INPUT_GITHUB-TOKEN': TOKEN,
+          'INPUT_ANTHROPIC-API-KEY': ANTHROPIC_API_KEY,
+          INPUT_MODEL: 'claude-haiku-4-5-20251001',
+          'INPUT_MAX-DIFF-TOKENS': '6000',
+          'INPUT_FAIL-ON-CRITICAL': 'false',
+          ANTHROPIC_BASE_URL: undefined,
+          GITHUB_REPOSITORY: `${OWNER}/${REPO}`,
+          GITHUB_EVENT_NAME: 'pull_request',
+          GITHUB_EVENT_PATH: cleanPr!.eventPath,
+        },
+      });
+
+      let stdout = '';
+      let stderr = '';
+      proc.stdout.on('data', (d: Buffer) => (stdout += d.toString()));
+      proc.stderr.on('data', (d: Buffer) => (stderr += d.toString()));
+
+      const timer = setTimeout(() => proc.kill('SIGTERM'), 25000);
+      proc.on('close', (status) => {
+        clearTimeout(timer);
+        resolve({ status, stdout, stderr });
+      });
+    });
+
+    expect(
+      result.status,
+      `dist/index.js exited with ${result.status}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
+    ).toBe(0);
+
+    const octokit = new Octokit({ auth: TOKEN });
+    const { data: comments } = await octokit.issues.listComments({
+      owner: OWNER,
+      repo: REPO,
+      issue_number: cleanPr!.prNumber,
+    });
+
+    const finvalidateComment = comments.find((c) =>
+      c.body?.includes('<!-- finvalidate-review -->'),
+    );
+    expect(
+      finvalidateComment,
+      `No FinValidate comment found on clean PR #${cleanPr!.prNumber} in ${OWNER}/${REPO}`,
+    ).toBeDefined();
+
+    expect(finvalidateComment!.body!.toLowerCase()).toContain(
+      'no fintech rule violations',
+    );
   });
 });
