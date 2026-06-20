@@ -13,6 +13,7 @@ export async function createEphemeralPR(
   token: string,
   owner: string,
   repo: string,
+  fixtureName: string = 'bad-payment.ts',
 ): Promise<EphemeralPR> {
   const octokit = new Octokit({ auth: token });
   const branchName = `e2e-test-${Date.now()}`;
@@ -36,7 +37,7 @@ export async function createEphemeralPR(
   });
 
   // Commit fixture file to test branch
-  const fixturePath = path.resolve(__dirname, 'fixtures', 'bad-payment.ts');
+  const fixturePath = path.resolve(__dirname, 'fixtures', fixtureName);
   const fixtureContent = fs.readFileSync(fixturePath, 'utf-8');
   await octokit.repos.createOrUpdateFileContents({
     owner,
