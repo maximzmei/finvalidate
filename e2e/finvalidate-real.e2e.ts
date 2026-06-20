@@ -153,3 +153,80 @@ describe('FinValidate Phase D — Real Claude', () => {
     ).toBeDefined();
   });
 });
+
+describe('FinValidate Phase D — Clean PR', () => {
+  let cleanPr: EphemeralPR | undefined;
+
+  beforeAll(async () => {
+    if (!TOKEN || !OWNER || !REPO || !ANTHROPIC_API_KEY) return;
+    if (!fs.existsSync(DIST_PATH)) return;
+    cleanPr = await createEphemeralPR(TOKEN, OWNER, REPO, 'clean-payment.ts');
+  }, 30000);
+
+  afterAll(async () => {
+    if (cleanPr) {
+      await cleanupPR(TOKEN, OWNER, REPO, cleanPr.prNumber, cleanPr.branchName, cleanPr.eventPath);
+    }
+  });
+
+  it('clean path: posts "no violations" comment and exits 0', async () => {
+    if (!cleanPr) throw new Error('cleanPr not created — check env vars and dist/index.js');
+
+    const result = await new Promise<{
+      status: number | null;
+      stdout: string;
+      stderr: string;
+    }>((resolve) => {
+      const proc = spawn('node', [DIST_PATH], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: {
+          ...process.env,
+          'INPUT_GITHUB-TOKEN': TOKEN,
+          'INPUT_ANTHROPIC-API-KEY': ANTHROPIC_API_KEY,
+          INPUT_MODEL: 'claude-haiku-4-5-20251001',
+          'INPUT_MAX-DIFF-TOKENS': '6000',
+          'INPUT_FAIL-ON-CRITICAL': 'false',
+          ANTHROPIC_BASE_URL: undefined,
+          GITHUB_REPOSITORY: `${OWNER}/${REPO}`,
+          GITHUB_EVENT_NAME: 'pull_request',
+          GITHUB_EVENT_PATH: cleanPr!.eventPath,
+        },
+      });
+
+      let stdout = '';
+      let stderr = '';
+      proc.stdout.on('data', (d: Buffer) => (stdout += d.toString()));
+      proc.stderr.on('data', (d: Buffer) => (stderr += d.toString()));
+
+      const timer = setTimeout(() => proc.kill('SIGTERM'), 25000);
+      proc.on('close', (status) => {
+        clearTimeout(timer);
+        resolve({ status, stdout, stderr });
+      });
+    });
+
+    expect(
+      result.status,
+      `dist/index.js exited with ${result.status}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
+    ).toBe(0);
+
+    const octokit = new Octokit({ auth: TOKEN });
+    const { data: comments } = await octokit.issues.listComments({
+      owner: OWNER,
+      repo: REPO,
+      issue_number: cleanPr!.prNumber,
+    });
+
+    const finvalidateComment = comments.find((c) =>
+      c.body?.includes('<!-- finvalidate-review -->'),
+    );
+    expect(
+      finvalidateComment,
+      `No FinValidate comment found on clean PR #${cleanPr!.prNumber} in ${OWNER}/${REPO}`,
+    ).toBeDefined();
+
+    expect(finvalidateComment!.body!.toLowerCase()).toContain(
+      'no fintech rule violations',
+    );
+  });
+});
