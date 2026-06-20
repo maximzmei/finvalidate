@@ -38,7 +38,7 @@ export async function reviewPR(input: ReviewInput): Promise<ReviewResult> {
     "No fintech rule violations detected",
   );
   const criticalCount = violationsFound
-    ? (response.match(/\*\*\[FIN-\d+\]\s+CRITICAL/g) ?? []).length
+    ? (response.match(/\bCRITICAL\b/g) ?? []).length
     : 0;
   const body = formatComment(response);
 
