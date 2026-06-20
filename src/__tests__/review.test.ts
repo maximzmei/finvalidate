@@ -139,7 +139,7 @@ describe("reviewPR", () => {
       },
     ] as unknown as ReturnType<typeof getPRFiles>);
     vi.mocked(callClaude).mockResolvedValue(
-      "🔴 CRITICAL: FIN-001 float arithmetic\n🔴 CRITICAL: FIN-003 toFixed",
+      "**[FIN-001] CRITICAL: float arithmetic\n**[FIN-003] CRITICAL: toFixed",
     );
     vi.mocked(postOrUpdateComment).mockResolvedValue(
       "https://github.com/org/repo/pull/1#issuecomment-99",

@@ -25,7 +25,7 @@ describe('FinValidate Phase D — Real Claude', () => {
       throw new Error(`dist/index.js not found at ${DIST_PATH} — run: npm run build`);
     }
     pr = await createEphemeralPR(TOKEN, OWNER, REPO);
-  });
+  }, 30000);
 
   afterAll(async () => {
     if (pr) await cleanupPR(TOKEN, OWNER, REPO, pr.prNumber, pr.branchName, pr.eventPath);
@@ -155,8 +155,12 @@ describe('FinValidate Phase D — Clean PR', () => {
   let cleanPr: EphemeralPR | undefined;
 
   beforeAll(async () => {
-    if (!TOKEN || !OWNER || !REPO || !ANTHROPIC_API_KEY) return;
-    if (!fs.existsSync(DIST_PATH)) return;
+    if (!TOKEN || !OWNER || !REPO || !ANTHROPIC_API_KEY) {
+      throw new Error('Missing: E2E_GITHUB_TOKEN, E2E_REPO_OWNER, E2E_REPO_NAME, ANTHROPIC_API_KEY');
+    }
+    if (!fs.existsSync(DIST_PATH)) {
+      throw new Error(`dist/index.js not found at ${DIST_PATH} — run: npm run build`);
+    }
     cleanPr = await createEphemeralPR(TOKEN, OWNER, REPO, 'clean-payment.ts');
   }, 30000);
 
@@ -167,8 +171,6 @@ describe('FinValidate Phase D — Clean PR', () => {
   });
 
   it('clean path: posts "no violations" comment and exits 0', async () => {
-    if (!cleanPr) throw new Error('cleanPr not created — check env vars and dist/index.js');
-
     const result = await new Promise<{
       status: number | null;
       stdout: string;

@@ -36,13 +36,18 @@ export async function createEphemeralPR(
     sha,
   });
 
+  // Derive destination path and PR title from fixtureName
+  const destPath = `src/${fixtureName}`;
+  const fixtureStem = fixtureName.replace(/\.ts$/, '');
+  const prTitle = `[E2E Test] ${fixtureStem} — will be closed automatically`;
+
   // Commit fixture file to test branch
   const fixturePath = path.resolve(__dirname, 'fixtures', fixtureName);
   const fixtureContent = fs.readFileSync(fixturePath, 'utf-8');
   await octokit.repos.createOrUpdateFileContents({
     owner,
     repo,
-    path: 'src/bad-payment.ts',
+    path: destPath,
     message: 'test: add file with FIN-001 violation',
     content: Buffer.from(fixtureContent).toString('base64'),
     branch: branchName,
@@ -52,7 +57,7 @@ export async function createEphemeralPR(
   const { data: pr } = await octokit.pulls.create({
     owner,
     repo,
-    title: '[E2E Test] FIN-001 violation — will be closed automatically',
+    title: prTitle,
     head: branchName,
     base: defaultBranch,
     body: 'Automated E2E test PR.',
