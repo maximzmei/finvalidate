@@ -3,7 +3,14 @@ import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Octokit } from '@octokit/rest';
-import { createEphemeralPR, cleanupPR, EphemeralPR } from './github-helper';
+import {
+  createEphemeralPR,
+  cleanupPR,
+  EphemeralPR,
+  createEphemeralPRWithConfig,
+  cleanupPRWithConfig,
+  EphemeralPRWithConfig,
+} from './github-helper';
 
 const TOKEN = process.env.E2E_GITHUB_TOKEN ?? '';
 const OWNER = process.env.E2E_REPO_OWNER ?? '';
@@ -227,5 +234,97 @@ describe('FinValidate Phase D — Clean PR', () => {
     expect(finvalidateComment!.body!.toLowerCase()).toContain(
       'no fintech rule violations',
     );
+  });
+});
+
+describe('Config: FIN-001 disabled via .finvalidate.yml', () => {
+  let configPr: EphemeralPRWithConfig | undefined;
+
+  beforeAll(async () => {
+    if (!TOKEN || !OWNER || !REPO || !ANTHROPIC_API_KEY) {
+      throw new Error('Missing: E2E_GITHUB_TOKEN, E2E_REPO_OWNER, E2E_REPO_NAME, ANTHROPIC_API_KEY');
+    }
+    if (!fs.existsSync(DIST_PATH)) {
+      throw new Error(`dist/index.js not found at ${DIST_PATH} — run: npm run build`);
+    }
+    configPr = await createEphemeralPRWithConfig(
+      TOKEN,
+      OWNER,
+      REPO,
+      'rules:\n  disable:\n    - FIN-001\n',
+    );
+  }, 60000);
+
+  afterAll(async () => {
+    if (configPr) {
+      await cleanupPRWithConfig(
+        TOKEN,
+        OWNER,
+        REPO,
+        configPr.prNumber,
+        configPr.branchName,
+        configPr.baseBranchName,
+        configPr.eventPath,
+      );
+    }
+  });
+
+  it('config.disable FIN-001: action posts comment without FIN-001 and exits 0', async () => {
+    const result = await new Promise<{
+      status: number | null;
+      stdout: string;
+      stderr: string;
+    }>((resolve) => {
+      const proc = spawn('node', [DIST_PATH], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: {
+          ...process.env,
+          'INPUT_GITHUB-TOKEN': TOKEN,
+          'INPUT_ANTHROPIC-API-KEY': ANTHROPIC_API_KEY,
+          INPUT_MODEL: 'claude-haiku-4-5-20251001',
+          'INPUT_MAX-DIFF-TOKENS': '6000',
+          'INPUT_FAIL-ON-CRITICAL': 'true',
+          ANTHROPIC_BASE_URL: undefined,
+          GITHUB_REPOSITORY: `${OWNER}/${REPO}`,
+          GITHUB_EVENT_NAME: 'pull_request',
+          GITHUB_EVENT_PATH: configPr!.eventPath,
+        },
+      });
+
+      let stdout = '';
+      let stderr = '';
+      proc.stdout.on('data', (d: Buffer) => (stdout += d.toString()));
+      proc.stderr.on('data', (d: Buffer) => (stderr += d.toString()));
+
+      const timer = setTimeout(() => proc.kill('SIGTERM'), 25000);
+      proc.on('close', (status) => {
+        clearTimeout(timer);
+        resolve({ status, stdout, stderr });
+      });
+    });
+
+    // FIN-001 is disabled via config — action must exit 0 even with FAIL-ON-CRITICAL=true
+    expect(
+      result.status,
+      `dist/index.js exited with ${result.status}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
+    ).toBe(0);
+
+    const octokit = new Octokit({ auth: TOKEN });
+    const { data: comments } = await octokit.issues.listComments({
+      owner: OWNER,
+      repo: REPO,
+      issue_number: configPr!.prNumber,
+    });
+
+    const finvalidateComment = comments.find((c) =>
+      c.body?.includes('<!-- finvalidate-review -->'),
+    );
+    expect(
+      finvalidateComment,
+      `No FinValidate comment on config PR #${configPr!.prNumber} in ${OWNER}/${REPO}`,
+    ).toBeDefined();
+
+    // FIN-001 must NOT appear — it is disabled in .finvalidate.yml on the base branch
+    expect(finvalidateComment!.body!).not.toContain('FIN-001');
   });
 });
