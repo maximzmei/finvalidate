@@ -55,7 +55,7 @@ That's it. FinValidate reviews every PR automatically and posts a comment with f
 | `anthropic-api-key` | ✅ | — | Anthropic API key (get one at console.anthropic.com) |
 | `model` | ❌ | `claude-sonnet-4-6` | Claude model to use |
 | `max-diff-tokens` | ❌ | `6000` | Max diff tokens sent to Claude — controls cost |
-| `fail-on-critical` | ❌ | `false` | Set to `'true'` to fail the step on CRITICAL violations |
+| `fail-on-critical` | ❌ | `false` | Set to `'true'` to fail the step on CRITICAL violations (can also be set via `.finvalidate.yml`) |
 
 ## Outputs
 
@@ -76,6 +76,37 @@ That's it. FinValidate reviews every PR automatically and posts a comment with f
 ```
 
 Add a branch protection rule requiring this check to pass — merges are blocked until CRITICAL violations are resolved.
+
+## Configuration — `.finvalidate.yml`
+
+Place a `.finvalidate.yml` file in the root of your repository to customize FinValidate's behavior per-repo without touching the workflow file.
+
+```yaml
+# .finvalidate.yml
+rules:
+  # Disable rules your team has consciously accepted or handles elsewhere
+  disable:
+    - FIN-007   # idempotency keys handled by our API gateway
+    - FIN-008
+
+  # Override severity for specific rules
+  severity:
+    FIN-002: warning   # downgrade from CRITICAL to WARNING
+
+behavior:
+  # Override the fail-on-critical workflow input at the repo level
+  fail-on-critical: true
+```
+
+### Options
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `rules.disable` | `string[]` | Rule IDs to skip entirely (e.g. `[FIN-001, FIN-007]`) |
+| `rules.severity` | `map` | Override severity: `critical` or `warning` |
+| `behavior.fail-on-critical` | `boolean` | Repo-level override for the `fail-on-critical` input |
+
+The config is read from the **base branch** of each PR, so changes to `.finvalidate.yml` take effect for PRs merging into that branch.
 
 ## Cost
 
