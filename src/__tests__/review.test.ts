@@ -4,6 +4,8 @@ vi.mock("../github");
 vi.mock("../claude");
 
 import { callClaude } from "../claude";
+import { DEFAULT_CONFIG } from "../config";
+import type { RepoConfig } from "../config";
 import { getPRFiles, postOrUpdateComment } from "../github";
 import { formatDiff, reviewPR } from "../review";
 
@@ -97,6 +99,7 @@ describe("reviewPR", () => {
     owner: "org",
     repo: "repo",
     prNumber: 1,
+    config: DEFAULT_CONFIG,
   };
 
   beforeEach(() => {
@@ -152,5 +155,44 @@ describe("reviewPR", () => {
     expect(result.commentUrl).toBe(
       "https://github.com/org/repo/pull/1#issuecomment-99",
     );
+  });
+
+  it("calls callClaude with prompt that omits disabled rules", async () => {
+    // spec: reviewPR — disabled rules are stripped from system prompt before calling Claude
+    vi.mocked(getPRFiles).mockResolvedValue([
+      { filename: "src/x.ts", status: "modified", patch: "+const x = 1;" },
+    ] as unknown as ReturnType<typeof getPRFiles>);
+    vi.mocked(callClaude).mockResolvedValue(
+      "✅ No fintech rule violations detected.",
+    );
+    vi.mocked(postOrUpdateComment).mockResolvedValue("https://example.com");
+
+    const config: RepoConfig = { ...DEFAULT_CONFIG, disable: ["FIN-007"] };
+    await reviewPR({ ...baseInput, config });
+
+    const [, , , systemPrompt] = vi.mocked(callClaude).mock.calls[0];
+    expect(systemPrompt).not.toContain("**FIN-007:");
+    expect(systemPrompt).toContain("**FIN-001:");
+  });
+
+  it("calls callClaude with prompt that includes severity override block", async () => {
+    // spec: reviewPR — severity overrides are appended to system prompt
+    vi.mocked(getPRFiles).mockResolvedValue([
+      { filename: "src/x.ts", status: "modified", patch: "+const x = 1;" },
+    ] as unknown as ReturnType<typeof getPRFiles>);
+    vi.mocked(callClaude).mockResolvedValue(
+      "✅ No fintech rule violations detected.",
+    );
+    vi.mocked(postOrUpdateComment).mockResolvedValue("https://example.com");
+
+    const config: RepoConfig = {
+      ...DEFAULT_CONFIG,
+      severity: { "FIN-001": "warning" },
+    };
+    await reviewPR({ ...baseInput, config });
+
+    const [, , , systemPrompt] = vi.mocked(callClaude).mock.calls[0];
+    expect(systemPrompt).toContain("## SEVERITY OVERRIDES");
+    expect(systemPrompt).toContain("Treat FIN-001 as WARNING (not CRITICAL).");
   });
 });

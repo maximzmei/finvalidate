@@ -1,3 +1,5 @@
+import type { RepoConfig } from "../config";
+
 export const FINTECH_SYSTEM_PROMPT = `
 You are FinValidate, a specialized code reviewer for TypeScript/Node.js fintech applications.
 
@@ -151,3 +153,25 @@ Note: Consider adding \`currency: string\` parameter or using a \`Money\` interf
 - When multiple violations exist in the same function, group them under one section.
 - Be concise: one violation = max 5 lines of output.
 `.trim();
+
+export function buildSystemPrompt(config: RepoConfig): string {
+  let prompt = FINTECH_SYSTEM_PROMPT;
+
+  for (const ruleId of config.disable) {
+    const pattern = new RegExp(
+      `\\*\\*${ruleId}:[\\s\\S]*?(?=\\*\\*FIN-|\\n---|\\n## |$)`,
+    );
+    prompt = prompt.replace(pattern, "");
+  }
+
+  const overrides = Object.entries(config.severity);
+  if (overrides.length > 0) {
+    const lines = overrides.map(
+      ([id, sev]) =>
+        `Treat ${id} as ${sev.toUpperCase()} (not ${sev === "warning" ? "CRITICAL" : "WARNING"}).`,
+    );
+    prompt += `\n\n## SEVERITY OVERRIDES\n${lines.join("\n")}`;
+  }
+
+  return prompt;
+}

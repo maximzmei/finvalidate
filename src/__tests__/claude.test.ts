@@ -28,9 +28,25 @@ describe("callClaude", () => {
       "test-key",
       "claude-sonnet-4-6",
       "diff content",
+      "test system prompt",
     );
 
     expect(result).toBe("🔴 CRITICAL: Using number for money");
+  });
+
+  it("passes systemPrompt as the system field to Anthropic", async () => {
+    // spec: callClaude — systemPrompt parameter is forwarded to messages.create as system field
+    mockCreate.mockResolvedValue({
+      content: [
+        { type: "text", text: "✅ No fintech rule violations detected." },
+      ],
+    });
+
+    await callClaude("test-key", "model", "diff", "custom prompt");
+
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ system: "custom prompt" }),
+    );
   });
 
   it("returns default no-violations string if block type is not text", async () => {
@@ -39,7 +55,7 @@ describe("callClaude", () => {
       content: [{ type: "tool_use", id: "x", name: "y", input: {} }],
     });
 
-    const result = await callClaude("test-key", "model", "diff");
+    const result = await callClaude("test-key", "model", "diff", "prompt");
 
     expect(result).toBe("✅ No fintech rule violations detected.");
   });
@@ -48,8 +64,8 @@ describe("callClaude", () => {
     // spec: callClaude — throws if Anthropic client throws (propagates to index.ts → core.setFailed)
     mockCreate.mockRejectedValue(new Error("API rate limit exceeded"));
 
-    await expect(callClaude("test-key", "model", "diff")).rejects.toThrow(
-      "API rate limit exceeded",
-    );
+    await expect(
+      callClaude("test-key", "model", "diff", "prompt"),
+    ).rejects.toThrow("API rate limit exceeded");
   });
 });
