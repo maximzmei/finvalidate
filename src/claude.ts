@@ -1,5 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 
+export const NO_VIOLATIONS_SENTINEL = "No fintech rule violations detected";
+
 export async function callClaude(
   apiKey: string,
   model: string,
@@ -10,7 +12,7 @@ export async function callClaude(
 
   const message = await client.messages.create({
     model,
-    max_tokens: 1024,
+    max_tokens: 4096,
     system: systemPrompt,
     messages: [
       {
@@ -21,6 +23,6 @@ export async function callClaude(
   });
 
   const block = message.content[0];
-  if (block.type !== "text") return "✅ No fintech rule violations detected.";
+  if (block.type !== "text") return `✅ ${NO_VIOLATIONS_SENTINEL}.`;
   return block.text;
 }

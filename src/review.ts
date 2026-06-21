@@ -1,4 +1,4 @@
-import { callClaude } from "./claude";
+import { NO_VIOLATIONS_SENTINEL, callClaude } from "./claude";
 import type { RepoConfig } from "./config";
 import { type PRFile, getPRFiles, postOrUpdateComment } from "./github";
 import { buildSystemPrompt } from "./rules/fintech";
@@ -43,9 +43,7 @@ export async function reviewPR(input: ReviewInput): Promise<ReviewResult> {
     systemPrompt,
   );
 
-  const violationsFound = !response.includes(
-    "No fintech rule violations detected",
-  );
+  const violationsFound = !response.includes(NO_VIOLATIONS_SENTINEL);
   const criticalCount = violationsFound
     ? (response.match(/\bCRITICAL\b/g) ?? []).length
     : 0;
