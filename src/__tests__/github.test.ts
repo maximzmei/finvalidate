@@ -1,10 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@octokit/rest");
+vi.mock("@actions/core");
 
+import * as core from "@actions/core";
 import { Octokit } from "@octokit/rest";
-import { postOrUpdateComment } from "../github";
+import { getPRFiles, postOrUpdateComment } from "../github";
 
+const mockListFiles = vi.fn();
 const mockListComments = vi.fn();
 const mockUpdateComment = vi.fn();
 const mockCreateComment = vi.fn();
@@ -14,7 +17,7 @@ beforeEach(() => {
   vi.mocked(Octokit).mockImplementation(
     () =>
       ({
-        pulls: { listFiles: vi.fn() },
+        pulls: { listFiles: mockListFiles },
         issues: {
           listComments: mockListComments,
           updateComment: mockUpdateComment,
@@ -22,6 +25,34 @@ beforeEach(() => {
         },
       }) as unknown as InstanceType<typeof Octokit>,
   );
+});
+
+describe("getPRFiles", () => {
+  it("emits core.warning when exactly 100 files are returned", async () => {
+    // spec: getPRFiles — warns when 100 files returned (potential silent truncation)
+    const files = Array.from({ length: 100 }, (_, i) => ({
+      filename: `src/file${i}.ts`,
+      status: "modified",
+    }));
+    mockListFiles.mockResolvedValue({ data: files });
+
+    await getPRFiles("token", "org", "repo", 1);
+
+    expect(core.warning).toHaveBeenCalledWith(
+      "PR has 100+ files — only the first 100 were reviewed. Some files may have been skipped.",
+    );
+  });
+
+  it("does not warn when fewer than 100 files are returned", async () => {
+    // spec: getPRFiles — no warning when file count < 100
+    mockListFiles.mockResolvedValue({
+      data: [{ filename: "src/x.ts", status: "modified" }],
+    });
+
+    await getPRFiles("token", "org", "repo", 1);
+
+    expect(core.warning).not.toHaveBeenCalled();
+  });
 });
 
 describe("postOrUpdateComment", () => {
